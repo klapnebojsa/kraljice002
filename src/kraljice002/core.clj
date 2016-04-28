@@ -35,7 +35,7 @@
    "Listing on page 225."
    (let [program-source
          (slurp (io/reader "examples/reduction.cl"))
-         num-items (Math/pow 2 22)                    ;2 na 20-tu = 1048576
+         num-items (Math/pow 2 20)                    ;2 na 20-tu = 1048576
          bytesize (* num-items Float/BYTES)           ;Float/BYTES = 4    =>   bytesize = 4 * 2na20 = 4 * 1048576 = 4194304.0
          workgroup-size 256
          notifications (chan)
@@ -66,7 +66,7 @@
                     cl-partial-output (cl-buffer ctx (/ bytesize workgroup-size)   ;kreira cl_buffer objekat u kontekstu ctx velicine (4 * 2na20 / 256 = 2na14) i read-write ogranicenjima
                                                  :read-write)
                     cl-partial-podaci (* workgroup-size Float/BYTES)       ;4 * 256 = 1024
-                    cl-x (* 8 workgroup-size Float/BYTES)                    
+                    cl-x (* 6 workgroup-size Float/BYTES)                    
                     prog (build-program! (program-with-source ctx [program-source]))   ;kreira program u kontekstu ctx sa kodom programa u kojem se nalaze tri kernela 
                     ;naive-reduction (kernel prog "naive_reduction")            ;definise kernel iz prog
                     reduction-scalar (kernel prog "reduction_scalar")          ;definise kernel iz prog
@@ -80,8 +80,8 @@
        ;(println "(apply + (float-array (range 0" num-items "))): " (apply + data))
 
        (facts
-        (println "============ Scalar reduction ======================================")
-        ;; ============= Scalar reduction ====================================
+        (println "============ Najosnovniji algoritam ======================================")
+        ;; ============= Najosnovniji algoritam ====================================
         (set-args! reduction-scalar cl-data cl-brpolja cl-partial-sums cl-partial-podaci cl-x cl-output) => reduction-scalar
         ;(set-args! reduction-scalar cl-data cl-partial-sums cl-partial-output)  ;setovanje promenjivih u kernelu        reduction-scalar
                                                                                  ;cl-partial-sums=1024  i         
@@ -91,10 +91,9 @@
         (enq-write! cqueue cl-brpolja brpolja) => cqueue        
         
         (enq-nd! cqueue reduction-scalar                       ;asinhrono izvrsava kernel u uredjaju. cqueue, kernel koji se izvrsava
-                 (work-size [num-items]             ;[2na20]  sa ovim poljem vraca niz resenja (za svaki work-group poseban zbur).
+                 (work-size [num-items]             ;[2na20]  sa ovim poljem vraca niz resenja (za svaki work-group posebno).
                                                     ;ako ovo izbrisemo vraca resenje samo u prvom elementu niza tj. konacan zbir svih work-group 
                             [256]                  ;[256] 
-                            ;[64]
                             )       
                  nil profile-event)                            ;wait_event - da li da se ceka zavrsetak izvrsenja navedenih event-a tj proile-event1
         (follow profile-event)
@@ -107,10 +106,10 @@
         (finish! cqueue)
         (println "Scalar reduction time:"
                  (-> (<!! notifications) :event profiling-info durations :end))
-       (println "UKUPAN ZBIR MEDJUSUMA____" (apply + (float-array (seq partial-output))))
+       ;(println "UKUPAN ZBIR MEDJUSUMA____" (apply + (float-array (seq partial-output))))
        ;(println "UKUPAN ZBIR MEDJUSUMA____" (seq partial-output)) 
-       (println "RESENJA____" (set (seq partial-output)))        
-       (println "elemenata izlaza (" bytesize "=" num-items "*" Float/BYTES ") /" workgroup-size "=" (/ bytesize workgroup-size)) 
+       (println "    RESENJA____: " (disj (set (seq partial-output)) 0))        
+       ;(println "elemenata izlaza (" bytesize "=" num-items "*" Float/BYTES ") /" workgroup-size "=" (/ bytesize workgroup-size)) 
        
 
         (println "---------------KRAJ -------------------")   
