@@ -35,7 +35,7 @@
    "Listing on page 225."
    (let [program-source
          (slurp (io/reader "examples/reduction.cl"))
-         num-items (Math/pow 2 20)                    ;2 na 20-tu = 1048576
+         num-items (Math/pow 2 15)                    ;2 na 20-tu = 1048576
          bytesize (* num-items Float/BYTES)           ;Float/BYTES = 4    =>   bytesize = 4 * 2na20 = 4 * 1048576 = 4194304.0
          workgroup-size 256
          notifications (chan)
@@ -65,9 +65,9 @@
                     cl-output (cl-buffer ctx bytesize :write-only)
                     cl-partial-output (cl-buffer ctx (/ bytesize workgroup-size)   ;kreira cl_buffer objekat u kontekstu ctx velicine (4 * 2na20 / 256 = 2na14) i read-write ogranicenjima
                                                  :read-write)
-                    cl-partial-podaci (* workgroup-size Float/BYTES)       ;4 * 256 = 1024
-                    cl-x (* 6 workgroup-size Float/BYTES)
-                    cl-y (* 6 workgroup-size Float/BYTES)                   
+                    cl-partial-podaci Float/BYTES       ;4 * 256 = 1024
+                    cl-x Float/BYTES
+                    cl-y Float/BYTES                   
                     prog (build-program! (program-with-source ctx [program-source]))   ;kreira program u kontekstu ctx sa kodom programa u kojem se nalaze tri kernela 
                     ;naive-reduction (kernel prog "naive_reduction")            ;definise kernel iz prog
                     reduction-scalar (kernel prog "reduction_scalar")          ;definise kernel iz prog
@@ -115,21 +115,21 @@
 
         )
        
-       #_(facts
+       (facts
         (println "============ Najosnovniji algoritam ======================================")
         ;; ============= Najosnovniji algoritam ====================================
-         (set-args! reduction-scalar2 cl-data cl-brpolja cl-partial-sums cl-partial-podaci cl-x cl-output) => reduction-scalar2
+        (set-args! reduction-scalar2 cl-data cl-brpolja cl-partial-sums cl-partial-podaci cl-x cl-output) => reduction-scalar2
 
         (enq-write! cqueue cl-data data) => cqueue                                 ;SETUJE VREDNOST GLOBALNE PROMENJIVE cl-data SA VREDNOSCU data
-         (enq-write! cqueue cl-brpolja brpolja) => cqueue        
+        (enq-write! cqueue cl-brpolja brpolja) => cqueue        
         
         (enq-nd! cqueue reduction-scalar2                       ;asinhrono izvrsava kernel u uredjaju. cqueue, kernel koji se izvrsava
-                  (work-size [num-items]             ;[2na20]  sa ovim poljem vraca niz resenja (za svaki work-group posebno).
-                                                     ;ako ovo izbrisemo vraca resenje samo u prvom elementu niza tj. konacan zbir svih work-group 
-                             [256]                  ;[256] 
-                             )       
+                 (work-size [num-items]             ;[2na20]  sa ovim poljem vraca niz resenja (za svaki work-group posebno).
+                                                    ;ako ovo izbrisemo vraca resenje samo u prvom elementu niza tj. konacan zbir svih work-group 
+                            [256]                  ;[256] 
+                            )       
                  (events profile-event) profile-event2)                            ;wait_event - da li da se ceka zavrsetak izvrsenja navedenih event-a tj proile-event1
-         (follow profile-event2)
+        (follow profile-event2)
         (enq-read! cqueue cl-output partial-output)
        
         (finish! cqueue)
