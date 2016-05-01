@@ -66,23 +66,25 @@
                     cl-partial-output (cl-buffer ctx (/ bytesize workgroup-size)   ;kreira cl_buffer objekat u kontekstu ctx velicine (4 * 2na20 / 256 = 2na14) i read-write ogranicenjima
                                                  :read-write)
                     cl-partial-podaci (* workgroup-size Float/BYTES)       ;4 * 256 = 1024
-                    cl-x (* 6 workgroup-size Float/BYTES)                    
+                    cl-x (* 6 workgroup-size Float/BYTES)
+                    cl-y (* 6 workgroup-size Float/BYTES)                   
                     prog (build-program! (program-with-source ctx [program-source]))   ;kreira program u kontekstu ctx sa kodom programa u kojem se nalaze tri kernela 
                     ;naive-reduction (kernel prog "naive_reduction")            ;definise kernel iz prog
                     reduction-scalar (kernel prog "reduction_scalar")          ;definise kernel iz prog
+                    reduction-scalar2 (kernel prog "reduction_scalar2")          ;definise kernel iz prog                    
                     ;reduction-vector (kernel prog "reduction_vector")          ;definise kernel iz prog
                     ;reduction-complete (kernel prog "reduction_complete")      ;definise kernel iz prog                    
                     profile-event (event)                  ;kreira novi cl_event (dogadjaj)
                     ;profile-event1 (event)                 ;          -||-
-                    ;profile-event2 (event)                 ;          -||- 
+                    profile-event2 (event)                 ;          -||- 
                     ;profile-event3 (event)                 ;          -||-       
                     ]
        ;(println "(apply + (float-array (range 0" num-items "))): " (apply + data))
 
        (facts
-        (println "============ Najosnovniji algoritam ======================================")
-        ;; ============= Najosnovniji algoritam ====================================
-        (set-args! reduction-scalar cl-data cl-brpolja cl-partial-sums cl-partial-podaci cl-x cl-output) => reduction-scalar
+        (println "============ Napredni algoritam ======================================")
+        ;; ============= Napredni algoritam ====================================
+        (set-args! reduction-scalar cl-data cl-brpolja cl-partial-sums cl-partial-podaci cl-x cl-y cl-output) => reduction-scalar
         ;(set-args! reduction-scalar cl-data cl-partial-sums cl-partial-output)  ;setovanje promenjivih u kernelu        reduction-scalar
                                                                                  ;cl-partial-sums=1024  i         
         ;=> reduction-scalar                                                      ;cl-partial-output = cl_buffer objekat u kontekstu ctx velicine (4 * 2na20 / 256 = 2na14) i read-write ogranicenjima
@@ -110,10 +112,39 @@
        ;(println "UKUPAN ZBIR MEDJUSUMA____" (seq partial-output)) 
        (println "    RESENJA____: " (disj (set (seq partial-output)) 0))        
        ;(println "elemenata izlaza (" bytesize "=" num-items "*" Float/BYTES ") /" workgroup-size "=" (/ bytesize workgroup-size)) 
+
+        )
+       
+       #_(facts
+        (println "============ Najosnovniji algoritam ======================================")
+        ;; ============= Najosnovniji algoritam ====================================
+         (set-args! reduction-scalar2 cl-data cl-brpolja cl-partial-sums cl-partial-podaci cl-x cl-output) => reduction-scalar2
+
+        (enq-write! cqueue cl-data data) => cqueue                                 ;SETUJE VREDNOST GLOBALNE PROMENJIVE cl-data SA VREDNOSCU data
+         (enq-write! cqueue cl-brpolja brpolja) => cqueue        
+        
+        (enq-nd! cqueue reduction-scalar2                       ;asinhrono izvrsava kernel u uredjaju. cqueue, kernel koji se izvrsava
+                  (work-size [num-items]             ;[2na20]  sa ovim poljem vraca niz resenja (za svaki work-group posebno).
+                                                     ;ako ovo izbrisemo vraca resenje samo u prvom elementu niza tj. konacan zbir svih work-group 
+                             [256]                  ;[256] 
+                             )       
+                 (events profile-event) profile-event2)                            ;wait_event - da li da se ceka zavrsetak izvrsenja navedenih event-a tj proile-event1
+         (follow profile-event2)
+        (enq-read! cqueue cl-output partial-output)
+       
+        (finish! cqueue)
+        (println "Scalar reduction 2 time:"
+                 (-> (<!! notifications) :event profiling-info durations :end))
+       ;(println "UKUPAN ZBIR MEDJUSUMA____" (apply + (float-array (seq partial-output))))
+       ;(println "UKUPAN ZBIR MEDJUSUMA____" (seq partial-output)) 
+       (println "    RESENJA____: " (disj (set (seq partial-output)) 0))        
+       ;(println "elemenata izlaza (" bytesize "=" num-items "*" Float/BYTES ") /" workgroup-size "=" (/ bytesize workgroup-size)) 
        
 
         (println "---------------KRAJ -------------------")   
         ;(println (seq data))
-        )))))
+        )       
+       
+       ))))
   
  ;(catch Exception e (println "Greska 11111111: " (.getMessage e))))
